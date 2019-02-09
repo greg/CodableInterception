@@ -1,0 +1,13 @@
+language: swift
+osx_image: xcode10.1
+
+matrix:
+  include:
+  - script:
+    - set -o pipefail && xcodebuild -project CodableInterception.xcodeproj -scheme CodableInterception\ Mac -destination platform\=macOS CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO build test | xcpretty
+  - script:
+    - set -o pipefail && xcodebuild -project CodableInterception.xcodeproj -scheme CodableInterception\ iOS -destination platform\=iOS\ Simulator,OS\=12.1,name\=iPhone\ X build test | xcpretty
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
+
