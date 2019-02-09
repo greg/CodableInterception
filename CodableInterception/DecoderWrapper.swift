@@ -6,10 +6,14 @@
 //  Copyright © 2019 Greg Omelaenko. All rights reserved.
 //
 
-struct DecoderWrapper<Customiser: CodingCustomiser>: Decoder {
+struct DecoderWrapper<Customiser: CodingCustomiser>: Decoder, DecoderWrapperProtocol {
     
     private let actualDecoder: Decoder
     let decodingInfo: DecodingInfo<Customiser>
+    
+    var underlyingDecoderType: Decoder.Type {
+        return type(of: actualDecoder)
+    }
     
     init(wrapping decoder: Decoder, decodingInfo: DecodingInfo<Customiser>) {
         self.actualDecoder = decoder
