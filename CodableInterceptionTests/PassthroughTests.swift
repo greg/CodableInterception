@@ -25,6 +25,7 @@ class PassthroughTests: XCTestCase {
         B(a: [])
     ]
 
+    /// A basic test to make sure the wrappers don't ruin anything
     func testPassthrough() {
         
         final class NonCustomiser: CodingCustomiser {
@@ -41,6 +42,7 @@ class PassthroughTests: XCTestCase {
         XCTAssert(decoded == sample)
     }
     
+    /// Logs encoding and decoding order and compares to what's expected
     func testLoggingPassthrough() {
         
         final class LoggingCustomiser: CodingCustomiser {
@@ -53,20 +55,20 @@ class PassthroughTests: XCTestCase {
                 log = "\(mode)\n"
             }
             
-            func encodeRoot<T>(_ value: T, to encoder: Encoder) throws where T : Encodable {
+            func encodeRoot<T>(_ value: T, to encoder: InterceptedEncoder) throws where T : Encodable {
                 print("+ coding root", T.self, to: &log)
                 var container = encoder.singleValueContainer()
                 try container.encode(value)
                 print("- coded root", T.self, to: &log)
             }
             
-            func encode<T>(_ value: T, to encoder: Encoder) throws where T : Encodable {
+            func encode<T>(_ value: T, to encoder: InterceptedEncoder) throws where T : Encodable {
                 print("+ coding", T.self, to: &log)
                 try value.encode(to: encoder)
                 print("- coded", T.self, to: &log)
             }
             
-            func decodeRoot<T>(_ type: T.Type, from decoder: Decoder) throws -> T where T : Decodable {
+            func decodeRoot<T>(_ type: T.Type, from decoder: InterceptedDecoder) throws -> T where T : Decodable {
                 print("+ coding root", type, to: &log)
                 let container = try decoder.singleValueContainer()
                 let r = try container.decode(type)
@@ -74,7 +76,7 @@ class PassthroughTests: XCTestCase {
                 return r
             }
             
-            func decode<T>(_ type: T.Type, from decoder: Decoder) throws -> T where T : Decodable {
+            func decode<T>(_ type: T.Type, from decoder: InterceptedDecoder) throws -> T where T : Decodable {
                 print("+ coding", type, to: &log)
                 let r = try type.init(from: decoder)
                 print("- coded", type, to: &log)
@@ -83,6 +85,7 @@ class PassthroughTests: XCTestCase {
             
             deinit {
                 // the original version of this test used a dictionary, and it kept failing because a dictionary encodes in a non-deterministic order
+                // the Ints in the array are encoded because array actually calls `encode<T>`, not `encode(Int)` because it's generic.
                 XCTAssert(log == """
                     \(mode)
                     + coding root Array<B>
@@ -128,6 +131,77 @@ class PassthroughTests: XCTestCase {
         let decoded = try! JSONDecoder().decode(Interceptor<[B]>.self, from: json).decodedValue
         
         XCTAssert(decoded == sample)
+    }
+    
+    /// Tests different combinations of single value containers used or not
+    func testDifferentContainerUsage() {
+        
+        final class ContainerCustomiser<WrapRoot, WrapOthers>: CodingCustomiser {
+            
+            init(for mode: CodingMode) {}
+            
+            func encodeRoot<T>(_ value: T, to encoder: InterceptedEncoder) throws where T : Encodable {
+                if WrapRoot.self is Never.Type {
+                    try value.encode(to: encoder)
+                }
+                else {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(value)
+                }
+            }
+            
+            func encode<T>(_ value: T, to encoder: InterceptedEncoder) throws where T : Encodable {
+                if WrapOthers.self is Never.Type {
+                    try value.encode(to: encoder)
+                }
+                else {
+                    var container = encoder.uninterceptedSingleValueContainer()
+                    try container.encode(value)
+                }
+            }
+            
+            func decodeRoot<T>(_ type: T.Type, from decoder: InterceptedDecoder) throws -> T where T : Decodable {
+                if WrapRoot.self is Never.Type {
+                    return try type.init(from: decoder)
+                }
+                else {
+                    let container = try decoder.singleValueContainer()
+                    return try container.decode(type)
+                }
+            }
+            
+            func decode<T>(_ type: T.Type, from decoder: InterceptedDecoder) throws -> T where T : Decodable {
+                if WrapOthers.self is Never.Type {
+                    return try type.init(from: decoder)
+                }
+                else {
+                    let container = try decoder.uninterceptedSingleValueContainer()
+                    return try container.decode(type)
+                }
+            }
+        }
+        
+        typealias Interceptor<V, R, O> = CodableInterceptor<V, ContainerCustomiser<R, O>>
+        
+        // default behaviour: single-value container for root, direct encoding for other values
+        let json1 = try! JSONEncoder().encode(Interceptor<[B], (), Never>(sample))
+        let decoded1 = try! JSONDecoder().decode(Interceptor<[B], (), Never>.self, from: json1).decodedValue
+        XCTAssert(decoded1 == sample)
+        
+        // single-value container for both
+        let json2 = try! JSONEncoder().encode(Interceptor<[B], (), ()>(sample))
+        let decoded2 = try! JSONDecoder().decode(Interceptor<[B], (), ()>.self, from: json2).decodedValue
+        XCTAssert(decoded2 == sample)
+        
+        // direct encoding for both
+        let json3 = try! JSONEncoder().encode(Interceptor<[B], Never, Never>(sample))
+        let decoded3 = try! JSONDecoder().decode(Interceptor<[B], Never, Never>.self, from: json3).decodedValue
+        XCTAssert(decoded3 == sample)
+        
+        // opposite to default: direct for root, container for others
+        let json4 = try! JSONEncoder().encode(Interceptor<[B], Never, ()>(sample))
+        let decoded4 = try! JSONDecoder().decode(Interceptor<[B], Never, ()>.self, from: json4).decodedValue
+        XCTAssert(decoded4 == sample)
     }
 
 }

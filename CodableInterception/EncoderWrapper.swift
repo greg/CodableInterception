@@ -6,7 +6,7 @@
 //  Copyright © 2019 Greg Omelaenko. All rights reserved.
 //
 
-struct EncoderWrapper<Customiser: CodingCustomiser>: Encoder, EncoderWrapperProtocol {
+struct EncoderWrapper<Customiser: CodingCustomiser>: Encoder, EncoderWrapperProtocol, InterceptedEncoder {
     
     private let actualEncoder: Encoder
     let encodingInfo: EncodingInfo<Customiser>
@@ -30,16 +30,30 @@ struct EncoderWrapper<Customiser: CodingCustomiser>: Encoder, EncoderWrapperProt
     
     func container<Key>(keyedBy type: Key.Type) -> KeyedEncodingContainer<Key> where Key : CodingKey {
         let container = actualEncoder.container(keyedBy: type)
-        let wrapped = KeyedContainerWrapper(wrapping: container, encodingInfo: encodingInfo)
+        let wrapped = KeyedContainerWrapper(wrapping: container, encodingInfo: encodingInfo, interceptEncodes: true)
+        return KeyedEncodingContainer(wrapped)
+    }
+    
+    func uninterceptedContainer<Key>(keyedBy type: Key.Type) -> KeyedEncodingContainer<Key> where Key : CodingKey {
+        let container = actualEncoder.container(keyedBy: type)
+        let wrapped = KeyedContainerWrapper(wrapping: container, encodingInfo: encodingInfo, interceptEncodes: false)
         return KeyedEncodingContainer(wrapped)
     }
     
     func unkeyedContainer() -> UnkeyedEncodingContainer {
-        return UnkeyedContainerWrapper(wrapping: actualEncoder.unkeyedContainer(), encodingInfo: encodingInfo)
+        return UnkeyedContainerWrapper(wrapping: actualEncoder.unkeyedContainer(), encodingInfo: encodingInfo, interceptEncodes: true)
+    }
+    
+    func uninterceptedUnkeyedContainer() -> UnkeyedEncodingContainer {
+        return UnkeyedContainerWrapper(wrapping: actualEncoder.unkeyedContainer(), encodingInfo: encodingInfo, interceptEncodes: false)
     }
     
     func singleValueContainer() -> SingleValueEncodingContainer {
-        return SingleValueContainerWrapper(wrapping: actualEncoder.singleValueContainer(), encodingInfo: encodingInfo)
+        return SingleValueContainerWrapper(wrapping: actualEncoder.singleValueContainer(), encodingInfo: encodingInfo, interceptEncodes: true)
+    }
+    
+    func uninterceptedSingleValueContainer() -> SingleValueEncodingContainer {
+        return SingleValueContainerWrapper(wrapping: actualEncoder.singleValueContainer(), encodingInfo: encodingInfo, interceptEncodes: false)
     }
     
 }
@@ -48,10 +62,12 @@ fileprivate struct KeyedContainerWrapper<Key: CodingKey, Customiser: CodingCusto
     
     private var actualContainer: KeyedEncodingContainer<Key>
     let encodingInfo: EncodingInfo<Customiser>
+    let interceptEncodes: Bool
     
-    init(wrapping container: KeyedEncodingContainer<Key>, encodingInfo: EncodingInfo<Customiser>) {
+    init(wrapping container: KeyedEncodingContainer<Key>, encodingInfo: EncodingInfo<Customiser>, interceptEncodes: Bool) {
         self.actualContainer = container
         self.encodingInfo = encodingInfo
+        self.interceptEncodes = interceptEncodes
     }
     
     var codingPath: [CodingKey] {
@@ -78,17 +94,17 @@ fileprivate struct KeyedContainerWrapper<Key: CodingKey, Customiser: CodingCusto
     mutating func encode(_ value: UInt64,    forKey key: Key) throws { try actualContainer.encode(value, forKey: key) }
     
     mutating func encode<T>(_ value: T, forKey key: Key) throws where T : Encodable {
-        try actualContainer.encode(encodingInfo.uniqueWrapper(for: value), forKey: key)
+        try actualContainer.encode(encodingInfo.uniqueWrapper(for: value, customiseEncode: interceptEncodes), forKey: key)
     }
     
     mutating func nestedContainer<NestedKey>(keyedBy keyType: NestedKey.Type, forKey key: Key) -> KeyedEncodingContainer<NestedKey> where NestedKey : CodingKey {
         let nested = actualContainer.nestedContainer(keyedBy: keyType, forKey: key)
-        let wrapped = KeyedContainerWrapper<NestedKey, Customiser>(wrapping: nested, encodingInfo: encodingInfo)
+        let wrapped = KeyedContainerWrapper<NestedKey, Customiser>(wrapping: nested, encodingInfo: encodingInfo, interceptEncodes: interceptEncodes)
         return KeyedEncodingContainer(wrapped)
     }
     
     mutating func nestedUnkeyedContainer(forKey key: Key) -> UnkeyedEncodingContainer {
-        return UnkeyedContainerWrapper(wrapping: actualContainer.nestedUnkeyedContainer(forKey: key), encodingInfo: encodingInfo)
+        return UnkeyedContainerWrapper(wrapping: actualContainer.nestedUnkeyedContainer(forKey: key), encodingInfo: encodingInfo, interceptEncodes: interceptEncodes)
     }
     
     mutating func superEncoder() -> Encoder {
@@ -106,10 +122,12 @@ fileprivate struct UnkeyedContainerWrapper<Customiser: CodingCustomiser>: Unkeye
     
     private var actualContainer: UnkeyedEncodingContainer
     let encodingInfo: EncodingInfo<Customiser>
+    let interceptEncodes: Bool
     
-    init(wrapping container: UnkeyedEncodingContainer, encodingInfo: EncodingInfo<Customiser>) {
+    init(wrapping container: UnkeyedEncodingContainer, encodingInfo: EncodingInfo<Customiser>, interceptEncodes: Bool) {
         self.actualContainer = container
         self.encodingInfo = encodingInfo
+        self.interceptEncodes = interceptEncodes
     }
     
     var codingPath: [CodingKey] {
@@ -140,17 +158,17 @@ fileprivate struct UnkeyedContainerWrapper<Customiser: CodingCustomiser>: Unkeye
     mutating func encode(_ value: UInt64)   throws { try actualContainer.encode(value) }
     
     mutating func encode<T>(_ value: T) throws where T : Encodable {
-        try actualContainer.encode(encodingInfo.uniqueWrapper(for: value))
+        try actualContainer.encode(encodingInfo.uniqueWrapper(for: value, customiseEncode: interceptEncodes))
     }
     
     mutating func nestedContainer<NestedKey>(keyedBy keyType: NestedKey.Type) -> KeyedEncodingContainer<NestedKey> where NestedKey : CodingKey {
         let nested = actualContainer.nestedContainer(keyedBy: keyType)
-        let wrapped = KeyedContainerWrapper(wrapping: nested, encodingInfo: encodingInfo)
+        let wrapped = KeyedContainerWrapper(wrapping: nested, encodingInfo: encodingInfo, interceptEncodes: interceptEncodes)
         return KeyedEncodingContainer(wrapped)
     }
     
     mutating func nestedUnkeyedContainer() -> UnkeyedEncodingContainer {
-        return UnkeyedContainerWrapper(wrapping: actualContainer.nestedUnkeyedContainer(), encodingInfo: encodingInfo)
+        return UnkeyedContainerWrapper(wrapping: actualContainer.nestedUnkeyedContainer(), encodingInfo: encodingInfo, interceptEncodes: interceptEncodes)
     }
     
     mutating func superEncoder() -> Encoder {
@@ -163,10 +181,12 @@ fileprivate struct SingleValueContainerWrapper<Customiser: CodingCustomiser>: Si
     
     private var actualContainer: SingleValueEncodingContainer
     let encodingInfo: EncodingInfo<Customiser>
+    let interceptEncodes: Bool
     
-    init(wrapping container: SingleValueEncodingContainer, encodingInfo: EncodingInfo<Customiser>) {
+    init(wrapping container: SingleValueEncodingContainer, encodingInfo: EncodingInfo<Customiser>, interceptEncodes: Bool) {
         self.actualContainer = container
         self.encodingInfo = encodingInfo
+        self.interceptEncodes = interceptEncodes
     }
     
     var codingPath: [CodingKey] {
@@ -193,7 +213,7 @@ fileprivate struct SingleValueContainerWrapper<Customiser: CodingCustomiser>: Si
     mutating func encode(_ value: UInt64)   throws { try actualContainer.encode(value) }
     
     mutating func encode<T>(_ value: T) throws where T : Encodable {
-        try actualContainer.encode(encodingInfo.uniqueWrapper(for: value))
+        try actualContainer.encode(encodingInfo.uniqueWrapper(for: value, customiseEncode: interceptEncodes))
     }
     
 }

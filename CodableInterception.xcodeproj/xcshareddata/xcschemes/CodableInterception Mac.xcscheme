@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "37065EC1220F29F700F5E2A4"
-               BuildableName = "CodableInterception_Mac.framework"
+               BuildableName = "CodableInterception.framework"
                BlueprintName = "CodableInterception Mac"
                ReferencedContainer = "container:CodableInterception.xcodeproj">
             </BuildableReference>
@@ -44,7 +44,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "37065EC1220F29F700F5E2A4"
-            BuildableName = "CodableInterception_Mac.framework"
+            BuildableName = "CodableInterception.framework"
             BlueprintName = "CodableInterception Mac"
             ReferencedContainer = "container:CodableInterception.xcodeproj">
          </BuildableReference>
@@ -66,7 +66,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "37065EC1220F29F700F5E2A4"
-            BuildableName = "CodableInterception_Mac.framework"
+            BuildableName = "CodableInterception.framework"
             BlueprintName = "CodableInterception Mac"
             ReferencedContainer = "container:CodableInterception.xcodeproj">
          </BuildableReference>
@@ -84,7 +84,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "37065EC1220F29F700F5E2A4"
-            BuildableName = "CodableInterception_Mac.framework"
+            BuildableName = "CodableInterception.framework"
             BlueprintName = "CodableInterception Mac"
             ReferencedContainer = "container:CodableInterception.xcodeproj">
          </BuildableReference>

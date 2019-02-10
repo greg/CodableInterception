@@ -6,7 +6,7 @@
 //  Copyright © 2019 Greg Omelaenko. All rights reserved.
 //
 
-struct DecoderWrapper<Customiser: CodingCustomiser>: Decoder, DecoderWrapperProtocol {
+struct DecoderWrapper<Customiser: CodingCustomiser>: Decoder, DecoderWrapperProtocol, InterceptedDecoder {
     
     private let actualDecoder: Decoder
     let decodingInfo: DecodingInfo<Customiser>
@@ -30,16 +30,30 @@ struct DecoderWrapper<Customiser: CodingCustomiser>: Decoder, DecoderWrapperProt
     
     func container<Key>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> where Key : CodingKey {
         let container = try actualDecoder.container(keyedBy: type)
-        let wrapped = KeyedContainerWrapper(wrapping: container, decodingInfo: decodingInfo)
+        let wrapped = KeyedContainerWrapper(wrapping: container, decodingInfo: decodingInfo, interceptDecodes: true)
+        return KeyedDecodingContainer(wrapped)
+    }
+    
+    func uninterceptedContainer<Key>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> where Key : CodingKey {
+        let container = try actualDecoder.container(keyedBy: type)
+        let wrapped = KeyedContainerWrapper(wrapping: container, decodingInfo: decodingInfo, interceptDecodes: false)
         return KeyedDecodingContainer(wrapped)
     }
     
     func unkeyedContainer() throws -> UnkeyedDecodingContainer {
-        return UnkeyedContainerWrapper(wrapping: try actualDecoder.unkeyedContainer(), decodingInfo: decodingInfo)
+        return UnkeyedContainerWrapper(wrapping: try actualDecoder.unkeyedContainer(), decodingInfo: decodingInfo, interceptDecodes: true)
+    }
+    
+    func uninterceptedUnkeyedContainer() throws -> UnkeyedDecodingContainer {
+        return UnkeyedContainerWrapper(wrapping: try actualDecoder.unkeyedContainer(), decodingInfo: decodingInfo, interceptDecodes: false)
     }
     
     func singleValueContainer() throws -> SingleValueDecodingContainer {
-        return SingleValueContainerWrapper(wrapping: try actualDecoder.singleValueContainer(), decodingInfo: decodingInfo)
+        return SingleValueContainerWrapper(wrapping: try actualDecoder.singleValueContainer(), decodingInfo: decodingInfo, interceptDecodes: true)
+    }
+    
+    func uninterceptedSingleValueContainer() throws -> SingleValueDecodingContainer {
+        return SingleValueContainerWrapper(wrapping: try actualDecoder.singleValueContainer(), decodingInfo: decodingInfo, interceptDecodes: false)
     }
     
 }
@@ -48,10 +62,12 @@ fileprivate struct KeyedContainerWrapper<Key: CodingKey, Customiser: CodingCusto
     
     private let actualContainer: KeyedDecodingContainer<Key>
     let decodingInfo: DecodingInfo<Customiser>
+    let interceptDecodes: Bool
     
-    init(wrapping container: KeyedDecodingContainer<Key>, decodingInfo: DecodingInfo<Customiser>) {
+    init(wrapping container: KeyedDecodingContainer<Key>, decodingInfo: DecodingInfo<Customiser>, interceptDecodes: Bool) {
         self.actualContainer = container
         self.decodingInfo = decodingInfo
+        self.interceptDecodes = interceptDecodes
     }
     
     var codingPath: [CodingKey] {
@@ -86,18 +102,18 @@ fileprivate struct KeyedContainerWrapper<Key: CodingKey, Customiser: CodingCusto
     func decode(_ type: UInt64.Type,    forKey key: Key) throws -> UInt64   { return try actualContainer.decode(type, forKey: key) }
     
     func decode<T>(_ type: T.Type, forKey key: Key) throws -> T where T : Decodable {
-        pushDecodingInfo(decodingInfo, for: DecodableWrapper<T, Customiser>.self)
+        pushDecodingInfo(decodingInfo, customiseDecode: interceptDecodes, for: DecodableWrapper<T, Customiser>.self)
         return try actualContainer.decode(DecodableWrapper<T, Customiser>.self, forKey: key).decodedValue
     }
     
     func nestedContainer<NestedKey>(keyedBy type: NestedKey.Type, forKey key: Key) throws -> KeyedDecodingContainer<NestedKey> where NestedKey : CodingKey {
         let nested = try actualContainer.nestedContainer(keyedBy: type, forKey: key)
-        let wrapped = KeyedContainerWrapper<NestedKey, Customiser>(wrapping: nested, decodingInfo: decodingInfo)
+        let wrapped = KeyedContainerWrapper<NestedKey, Customiser>(wrapping: nested, decodingInfo: decodingInfo, interceptDecodes: interceptDecodes)
         return KeyedDecodingContainer(wrapped)
     }
     
     func nestedUnkeyedContainer(forKey key: Key) throws -> UnkeyedDecodingContainer {
-        return UnkeyedContainerWrapper(wrapping: try actualContainer.nestedUnkeyedContainer(forKey: key), decodingInfo: decodingInfo)
+        return UnkeyedContainerWrapper(wrapping: try actualContainer.nestedUnkeyedContainer(forKey: key), decodingInfo: decodingInfo, interceptDecodes: interceptDecodes)
     }
     
     func superDecoder() throws -> Decoder {
@@ -114,10 +130,12 @@ fileprivate struct UnkeyedContainerWrapper<Customiser: CodingCustomiser>: Unkeye
     
     private var actualContainer: UnkeyedDecodingContainer
     let decodingInfo: DecodingInfo<Customiser>
+    let interceptDecodes: Bool
     
-    init(wrapping container: UnkeyedDecodingContainer, decodingInfo: DecodingInfo<Customiser>) {
+    init(wrapping container: UnkeyedDecodingContainer, decodingInfo: DecodingInfo<Customiser>, interceptDecodes: Bool) {
         self.actualContainer = container
         self.decodingInfo = decodingInfo
+        self.interceptDecodes = interceptDecodes
     }
     
     var codingPath: [CodingKey] {
@@ -156,18 +174,18 @@ fileprivate struct UnkeyedContainerWrapper<Customiser: CodingCustomiser>: Unkeye
     mutating func decode(_ type: UInt64.Type)   throws -> UInt64   { return try actualContainer.decode(type) }
     
     mutating func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
-        pushDecodingInfo(decodingInfo, for: DecodableWrapper<T, Customiser>.self)
+        pushDecodingInfo(decodingInfo, customiseDecode: interceptDecodes, for: DecodableWrapper<T, Customiser>.self)
         return try actualContainer.decode(DecodableWrapper<T, Customiser>.self).decodedValue
     }
     
     mutating func nestedContainer<NestedKey>(keyedBy type: NestedKey.Type) throws -> KeyedDecodingContainer<NestedKey> where NestedKey : CodingKey {
         let nested = try actualContainer.nestedContainer(keyedBy: type)
-        let wrapped = KeyedContainerWrapper(wrapping: nested, decodingInfo: decodingInfo)
+        let wrapped = KeyedContainerWrapper(wrapping: nested, decodingInfo: decodingInfo, interceptDecodes: interceptDecodes)
         return KeyedDecodingContainer(wrapped)
     }
     
     mutating func nestedUnkeyedContainer() throws -> UnkeyedDecodingContainer {
-        return UnkeyedContainerWrapper(wrapping: try actualContainer.nestedUnkeyedContainer(), decodingInfo: decodingInfo)
+        return UnkeyedContainerWrapper(wrapping: try actualContainer.nestedUnkeyedContainer(), decodingInfo: decodingInfo, interceptDecodes: interceptDecodes)
     }
     
     mutating func superDecoder() throws -> Decoder {
@@ -180,10 +198,12 @@ fileprivate struct SingleValueContainerWrapper<Customiser: CodingCustomiser>: Si
     
     private let actualContainer: SingleValueDecodingContainer
     let decodingInfo: DecodingInfo<Customiser>
+    let interceptDecodes: Bool
     
-    init(wrapping container: SingleValueDecodingContainer, decodingInfo: DecodingInfo<Customiser>) {
+    init(wrapping container: SingleValueDecodingContainer, decodingInfo: DecodingInfo<Customiser>, interceptDecodes: Bool) {
         self.actualContainer = container
         self.decodingInfo = decodingInfo
+        self.interceptDecodes = interceptDecodes
     }
     
     var codingPath: [CodingKey] {
@@ -210,7 +230,7 @@ fileprivate struct SingleValueContainerWrapper<Customiser: CodingCustomiser>: Si
     func decode(_ type: UInt64.Type)   throws -> UInt64   { return try actualContainer.decode(type) }
     
     func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
-        pushDecodingInfo(decodingInfo, for: DecodableWrapper<T, Customiser>.self)
+        pushDecodingInfo(decodingInfo, customiseDecode: interceptDecodes, for: DecodableWrapper<T, Customiser>.self)
         return try actualContainer.decode(DecodableWrapper<T, Customiser>.self).decodedValue
     }
     

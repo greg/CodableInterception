@@ -23,21 +23,22 @@ final class EncodingInfo<Customiser: CodingCustomiser> {
     
     private var identityStore: [ObjectIdentifier : EncodableWrapper<Customiser>] = [:]
     
-    func uniqueWrapper<V: Encodable>(for value: V) -> EncodableWrapper<Customiser> {
+    func uniqueWrapper<V: Encodable>(for value: V, customiseEncode: Bool) -> EncodableWrapper<Customiser> {
         if type(of: value) is AnyClass {
             let id = ObjectIdentifier(value as AnyObject)
             // we've seen this object before, we should use the same wrapper so any === identity checks are consistent
             if let wrapper = identityStore[id] {
+                wrapper.customiseEncode = customiseEncode
                 return wrapper
             }
             else {
-                let wrapper = EncodableWrapper(value, encodingInfo: self)
+                let wrapper = EncodableWrapper(value, encodingInfo: self, customiseEncode: customiseEncode)
                 identityStore[id] = wrapper
                 return wrapper
             }
         }
         else {
-            return EncodableWrapper(value, encodingInfo: self)
+            return EncodableWrapper(value, encodingInfo: self, customiseEncode: customiseEncode)
         }
     }
     
@@ -63,22 +64,29 @@ extension CodableInterceptor: Encodable where Value: Encodable {
 final class EncodableWrapper<Customiser: CodingCustomiser>: Encodable, EncodableWrapperProtocol {
     
     /// Stores a "canned" generic call to `value.encode(to:)` since we discard that type information after `init`.
-    private let encodeValue: (Encoder) throws -> Void
+    private let encodeValue: (InterceptedEncoder, _ customise: Bool) throws -> Void
     let underlyingValueType: Encodable.Type
     /// The single strong reference to `encodingInfo` is held by the root CodableInterceptor.
     private unowned let encodingInfo: EncodingInfo<Customiser>
+    fileprivate var customiseEncode: Bool
     
-    fileprivate init<V: Encodable>(_ value: V, encodingInfo: EncodingInfo<Customiser>) {
-        self.encodeValue = { [unowned encodingInfo] encoder in
-            try encodingInfo.customiser.encode(value, to: encoder)
+    fileprivate init<V: Encodable>(_ value: V, encodingInfo: EncodingInfo<Customiser>, customiseEncode: Bool) {
+        self.encodeValue = { [unowned encodingInfo] (wrappedEncoder, customise) in
+            if customise {
+                try encodingInfo.customiser.encode(value, to: wrappedEncoder)
+            }
+            else {
+                try value.encode(to: wrappedEncoder)
+            }
         }
         self.underlyingValueType = type(of: value)
         self.encodingInfo = encodingInfo
+        self.customiseEncode = customiseEncode
     }
     
     func encode(to encoder: Encoder) throws {
         let wrappedEncoder = EncoderWrapper(wrapping: encoder, encodingInfo: encodingInfo)
-        try encodeValue(wrappedEncoder)
+        try encodeValue(wrappedEncoder, customiseEncode)
     }
     
 }
@@ -105,9 +113,14 @@ final class DecodableWrapper<Value: Decodable, Customiser: CodingCustomiser>: De
     let decodedValue: Value
     
     init(from decoder: Decoder) throws {
-        let decodingInfo = popDecodingInfo(for: type(of: self)) as DecodingInfo<Customiser>
+        let (decodingInfo, customise) = popDecodingInfo(for: type(of: self)) as (DecodingInfo<Customiser>, Bool)
         let wrappedDecoder = DecoderWrapper(wrapping: decoder, decodingInfo: decodingInfo)
-        self.decodedValue = try decodingInfo.customiser.decode(Value.self, from: wrappedDecoder)
+        if customise {
+            self.decodedValue = try decodingInfo.customiser.decode(Value.self, from: wrappedDecoder)
+        }
+        else {
+            self.decodedValue = try Value(from: wrappedDecoder)
+        }
     }
     
 }

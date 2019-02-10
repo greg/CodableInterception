@@ -16,13 +16,13 @@ import Dispatch
 fileprivate var _decodingInfoStacks: [ObjectIdentifier : [Thread : Any]] = [:]
 fileprivate let _decodingInfoStacksSemaphore = DispatchSemaphore(value: 1)
 
-fileprivate func withDecodingInfoStack<Customiser: CodingCustomiser, R>(for customiserType: Customiser.Type, inThread thread: Thread = Thread.current, _ f: (inout [(Any.Type, DecodingInfo<Customiser>)]) throws -> R) rethrows -> R {
+fileprivate func withDecodingInfoStack<Customiser: CodingCustomiser, R>(for customiserType: Customiser.Type, inThread thread: Thread = Thread.current, _ f: (inout [(receiver: Any.Type, decodingInfo: DecodingInfo<Customiser>, customise: Bool)]) throws -> R) rethrows -> R {
     _decodingInfoStacksSemaphore.wait()
     defer { _decodingInfoStacksSemaphore.signal() }
     
     let id = ObjectIdentifier(Customiser.self)
     var byThread = _decodingInfoStacks[id] ?? [:]
-    var stack = byThread[thread].map({ $0 as! [(Any.Type, DecodingInfo<Customiser>)] }) ?? []
+    var stack = byThread[thread].map({ $0 as! [(receiver: Any.Type, decodingInfo: DecodingInfo<Customiser>, customise: Bool)] }) ?? []
     let result = try f(&stack)
     byThread[thread] = stack
     _decodingInfoStacks[id] = byThread
@@ -31,19 +31,19 @@ fileprivate func withDecodingInfoStack<Customiser: CodingCustomiser, R>(for cust
 }
 
 /// - Parameter receiver: Recorded for debugging purposes.
-func pushDecodingInfo<Customiser: CodingCustomiser>(_ decodingInfo: DecodingInfo<Customiser>, for receiver: Any.Type) {
+func pushDecodingInfo<Customiser: CodingCustomiser>(_ decodingInfo: DecodingInfo<Customiser>, customiseDecode: Bool, for receiver: Any.Type) {
     withDecodingInfoStack(for: Customiser.self) { stack in
-        stack.append((receiver, decodingInfo))
+        stack.append((receiver, decodingInfo, customiseDecode))
     }
 }
 
-func popDecodingInfo<Customiser: CodingCustomiser>(for receiver: Any.Type) -> DecodingInfo<Customiser> {
-    let (intended, decodingInfo) = withDecodingInfoStack(for: Customiser.self) { stack -> (Any.Type, DecodingInfo<Customiser>) in
+func popDecodingInfo<Customiser: CodingCustomiser>(for receiver: Any.Type) -> (decodingInfo: DecodingInfo<Customiser>, customise: Bool) {
+    let (intended, decodingInfo, customise) = withDecodingInfoStack(for: Customiser.self) { stack -> (Any.Type, DecodingInfo<Customiser>, Bool) in
         guard let top = stack.popLast() else {
             preconditionFailure("BUG: Tried to pop a \(DecodingInfo<Customiser>.self) for \(receiver) but the stack is empty.")
         }
         return top
     }
     precondition(intended == receiver, "BUG: \(DecodingInfo<Customiser>.self) was intended for \(intended) but was popped by \(receiver).")
-    return decodingInfo
+    return (decodingInfo, customise)
 }
