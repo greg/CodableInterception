@@ -37,6 +37,8 @@ public protocol CodingCustomiser: AnyObject {
     /// If multiple nested `CodableInterceptor`s are in use at once, **this may not actually be the real type of the value being encoded**.
     /// In such cases, if you rely on the type, check if `value` conforms to `EncodableWrapperProtocol`.
     ///
+    /// The default implementation calls `value.encode(to: encoder)`.
+    ///
     /// The type of `encoder` will **not** be the type of the actual underlying encoder used.
     func encode<T: Encodable>(_ value: T, to encoder: Encoder) throws
     
@@ -51,6 +53,8 @@ public protocol CodingCustomiser: AnyObject {
     /// A customisation point for an intercepted call to `T(from: decoder)`.
     ///
     /// The same caveats with regards to `T` and `decoder`'s types apply as for `encode(_:to:)`.
+    ///
+    /// The default implementation returns `type.init(from: decoder)`.
     func decode<T: Decodable>(_ type: T.Type, from decoder: Decoder) throws -> T
     
 }
