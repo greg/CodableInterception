@@ -26,7 +26,7 @@ public protocol EncodableWrapperProtocol: Encodable {
 public protocol DecodableWrapperProtocol: Decodable {
     
     /// The type of the underlying value to be decoded.
-    var underlyingValueType: Decodable.Type { get }
+    static var underlyingValueType: Decodable.Type { get }
     
 }
 

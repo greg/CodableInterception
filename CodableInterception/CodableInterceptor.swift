@@ -110,7 +110,9 @@ extension CodableInterceptor: Decodable where Value: Decodable {
 
 final class DecodableWrapper<Value: Decodable, Customiser: CodingCustomiser>: Decodable, DecodableWrapperProtocol {
     
-    let underlyingValueType: Decodable.Type = Value.self
+    static var underlyingValueType: Decodable.Type {
+        return Value.self
+    }
     
     let decodedValue: Value
     
