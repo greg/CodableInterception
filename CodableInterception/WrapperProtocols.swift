@@ -28,6 +28,10 @@ public protocol DecodableWrapperProtocol: Decodable {
     /// The type of the underlying value to be decoded.
     static var underlyingValueType: Decodable.Type { get }
     
+    /// Called by a decoder which implements special behaviour when decoding `underlyingValueType`.
+    /// - Precondition: The type of `decodedValue` is `underlyingValueType`.
+    init(decodedValue: Decodable)
+    
 }
 
 /// A type which wraps an `Encoder` which is doing the actual encoding work, in order to customise the process.

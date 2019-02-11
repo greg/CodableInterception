@@ -127,4 +127,12 @@ final class DecodableWrapper<Value: Decodable, Customiser: CodingCustomiser>: De
         }
     }
     
+    init(decodedValue: Decodable) {
+        // our container wrapper pushed this for us, we need to collect it
+        _ = popDecodingInfo(for: type(of: self)) as (DecodingInfo<Customiser>, Bool)
+        
+        precondition(decodedValue is Value, "\(DecodableWrapper<Value, Customiser>.self).init(decodedValue:) called with non-matching type \(type(of: decodedValue)).")
+        self.decodedValue = decodedValue as! Value
+    }
+    
 }
