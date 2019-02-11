@@ -66,6 +66,7 @@ final class EncodableWrapper<Customiser: CodingCustomiser>: Encodable, Encodable
     /// Stores a "canned" generic call to `value.encode(to:)` since we discard that type information after `init`.
     private let encodeValue: (InterceptedEncoder, _ customise: Bool) throws -> Void
     let underlyingValueType: Encodable.Type
+    let underlyingObjectIdentifier: ObjectIdentifier?
     /// The single strong reference to `encodingInfo` is held by the root CodableInterceptor.
     private unowned let encodingInfo: EncodingInfo<Customiser>
     fileprivate var customiseEncode: Bool
@@ -80,6 +81,7 @@ final class EncodableWrapper<Customiser: CodingCustomiser>: Encodable, Encodable
             }
         }
         self.underlyingValueType = type(of: value)
+        self.underlyingObjectIdentifier = V.self is AnyClass ? ObjectIdentifier(value as AnyObject) : nil
         self.encodingInfo = encodingInfo
         self.customiseEncode = customiseEncode
     }

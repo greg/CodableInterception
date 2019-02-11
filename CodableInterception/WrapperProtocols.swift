@@ -16,6 +16,9 @@ public protocol EncodableWrapperProtocol: Encodable {
     /// and so might be more specific than the declared type of the value wherever it is used.
     var underlyingValueType: Encodable.Type { get }
     
+    /// If `underlyingValueType` is a class type, the identifier of the stored object.
+    var underlyingObjectIdentifier: ObjectIdentifier? { get }
+    
 }
 
 /// A type which wraps the `Decodable` value that is to be decoded, in order to customise the process.
